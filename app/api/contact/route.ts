@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import nodemailer from 'nodemailer'
 
 export async function POST(req: NextRequest) {
   const { name, email, message } = await req.json()
@@ -7,21 +8,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'All fields are required.' }, { status: 400 })
   }
 
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Email service not configured.' }, { status: 500 })
-  }
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
-    body: JSON.stringify({
-      from: 'Wayne Wallace Portfolio <wayne@acedigitalproductions.com>',
-      to: ['wayne@waynewallace.io'],
-      reply_to: email,
+  })
+
+  try {
+    await transporter.sendMail({
+      from: `Wayne Wallace Portfolio <${process.env.SMTP_USER}>`,
+      to: 'wayne@waynewallace.io',
+      replyTo: email,
       subject: `Portfolio inquiry from ${name}`,
       html: `
         <p><strong>Name:</strong> ${name}</p>
@@ -29,11 +30,9 @@ export async function POST(req: NextRequest) {
         <p><strong>Message:</strong></p>
         <p>${message.replace(/\n/g, '<br>')}</p>
       `,
-    }),
-  })
-
-  if (!res.ok) {
-    console.error('Resend error:', await res.text())
+    })
+  } catch (err) {
+    console.error('SMTP error:', err)
     return NextResponse.json({ error: 'Failed to send message.' }, { status: 500 })
   }
 
